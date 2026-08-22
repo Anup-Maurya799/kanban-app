@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const listSchema = new mongoose.Schema(
   {
@@ -21,4 +21,6 @@ const listSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("List", listSchema);
+const List = mongoose.model("List", listSchema);
+
+export default List;

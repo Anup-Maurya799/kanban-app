@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const boardSchema = new mongoose.Schema(
   {
@@ -25,4 +25,6 @@ const boardSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("Board", boardSchema);
+const Board = mongoose.model("Board", boardSchema);
+
+export default Board;
