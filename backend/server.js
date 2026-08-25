@@ -5,6 +5,9 @@ import dotenv from "dotenv";
 
 import authRoutes from "./routes/authRoutes.js";
 import workspaceRoutes from "./routes/workspaceRoutes.js";
+import boardRoutes from "./routes/boardRoutes.js";
+import listRoutes from "./routes/listRoutes.js";
+import cardRoutes from "./routes/cardRoutes.js";
 
 dotenv.config();
 
@@ -18,6 +21,9 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/workspaces", workspaceRoutes);
+app.use("/api/boards", boardRoutes);
+app.use("/api/lists", listRoutes);
+app.use("/api/cards", cardRoutes);
 
 const PORT = process.env.PORT || 5000;
 
