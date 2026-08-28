@@ -20,7 +20,7 @@ const List = ({ list, index, cards, onAddCard, onCardClick, onDeleteList }) => {
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`bg-base rounded-xl w-72 flex-shrink-0 flex flex-col max-h-full transition ${
+          className={`bg-base rounded-xl w-72 shrink-0 flex flex-col max-h-full transition ${
             snapshot.isDragging ? "shadow-xl ring-2 ring-primary/30" : ""
           }`}
         >
@@ -44,7 +44,7 @@ const List = ({ list, index, cards, onAddCard, onCardClick, onDeleteList }) => {
               <div
                 ref={dropProvided.innerRef}
                 {...dropProvided.droppableProps}
-                className={`flex-1 overflow-y-auto px-2 pb-2 min-h-[20px] rounded-lg transition ${
+                className={`flex-1 overflow-y-auto px-2 pb-2 min-h-5 rounded-lg transition ${
                   dropSnapshot.isDraggingOver ? "bg-accent/10" : ""
                 }`}
               >

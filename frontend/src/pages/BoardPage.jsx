@@ -36,6 +36,7 @@ const BoardPage = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBoardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardId]);
 
   const handleAddList = async (e) => {
@@ -180,7 +181,7 @@ const BoardPage = () => {
               ))}
               {provided.placeholder}
 
-              <div className="w-72 flex-shrink-0">
+              <div className="w-72 shrink-0">
                 {showListForm ?
                   <form
                     onSubmit={handleAddList}
