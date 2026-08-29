@@ -31,7 +31,7 @@ const CardModal = ({ cardId, onClose, onUpdate, onDelete }) => {
       dueDate: dueDate || null,
     });
     setCard(res.data);
-    onUpdate();
+    onUpdate(res.data);
   };
 
   const handleAddComment = async (e) => {

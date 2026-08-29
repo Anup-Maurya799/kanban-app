@@ -1,14 +1,19 @@
-/* eslint-disable no-unused-vars */
-import { useState, useEffect } from "react";
+// eslint-disable-next-line no-unused-vars
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
 import MainLayout from "../layouts/MainLayout";
 import List from "../components/List";
 import CardModal from "../components/CardModal";
 import api from "../api/axios";
+import { useSocket } from "../context/SocketContext";
+import { useAuth } from "../context/AuthContext";
 
 const BoardPage = () => {
   const { boardId } = useParams();
+  const { socket } = useSocket();
+  // eslint-disable-next-line no-unused-vars
+  const { user } = useAuth();
   const [board, setBoard] = useState(null);
   const [lists, setLists] = useState([]);
   const [cards, setCards] = useState([]);
@@ -36,16 +41,88 @@ const BoardPage = () => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBoardData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardId]);
+
+  // --- Join / leave the board's socket room ---
+  useEffect(() => {
+    if (!socket) return;
+    socket.emit("join-board", boardId);
+    return () => {
+      socket.emit("leave-board", boardId);
+    };
+  }, [socket, boardId]);
+
+  // --- Listen for real-time events from other users ---
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCardMoved = (payload) => {
+      setCards((prev) => {
+        const others = prev.filter((c) => c.list !== payload.listId);
+        return [...others, ...payload.cards];
+      });
+    };
+
+    const handleCardCreated = (payload) => {
+      setCards((prev) => {
+        if (prev.some((c) => c._id === payload._id)) return prev;
+        return [...prev, payload];
+      });
+    };
+
+    const handleCardUpdated = (payload) => {
+      setCards((prev) =>
+        prev.map((c) => (c._id === payload._id ? payload : c)),
+      );
+    };
+
+    const handleCardDeleted = ({ cardId }) => {
+      setCards((prev) => prev.filter((c) => c._id !== cardId));
+    };
+
+    const handleListCreated = (payload) => {
+      setLists((prev) => {
+        if (prev.some((l) => l._id === payload._id)) return prev;
+        return [...prev, payload];
+      });
+    };
+
+    const handleListReordered = (payload) => {
+      setLists(payload.lists);
+    };
+
+    const handleListDeleted = ({ listId }) => {
+      setLists((prev) => prev.filter((l) => l._id !== listId));
+      setCards((prev) => prev.filter((c) => c.list !== listId));
+    };
+
+    socket.on("card-moved", handleCardMoved);
+    socket.on("card-created", handleCardCreated);
+    socket.on("card-updated", handleCardUpdated);
+    socket.on("card-deleted", handleCardDeleted);
+    socket.on("list-created", handleListCreated);
+    socket.on("list-reordered", handleListReordered);
+    socket.on("list-deleted", handleListDeleted);
+
+    return () => {
+      socket.off("card-moved", handleCardMoved);
+      socket.off("card-created", handleCardCreated);
+      socket.off("card-updated", handleCardUpdated);
+      socket.off("card-deleted", handleCardDeleted);
+      socket.off("list-created", handleListCreated);
+      socket.off("list-reordered", handleListReordered);
+      socket.off("list-deleted", handleListDeleted);
+    };
+  }, [socket]);
 
   const handleAddList = async (e) => {
     e.preventDefault();
     if (!newListTitle.trim()) return;
     const res = await api.post("/lists", { title: newListTitle, boardId });
-    setLists([...lists, res.data]);
+    setLists((prev) => [...prev, res.data]);
     setNewListTitle("");
     setShowListForm(false);
+    socket?.emit("list-created", { boardId, payload: res.data });
   };
 
   const handleDeleteList = async (listId) => {
@@ -55,6 +132,8 @@ const BoardPage = () => {
     setCards(cards.filter((c) => c.list !== listId));
     try {
       await api.delete(`/lists/${listId}`);
+      socket?.emit("list-deleted", { boardId, payload: { listId } });
+      // eslint-disable-next-line no-unused-vars
     } catch (err) {
       setLists(prevLists);
       setCards(prevCards);
@@ -65,14 +144,23 @@ const BoardPage = () => {
   const handleAddCard = async (listId, title) => {
     const res = await api.post("/cards", { title, listId, boardId });
     setCards((prev) => [...prev, res.data]);
+    socket?.emit("card-created", { boardId, payload: res.data });
   };
 
-  const handleCardUpdate = () => {
-    fetchBoardData();
+  const handleCardUpdate = (updatedCard) => {
+    if (updatedCard) {
+      setCards((prev) =>
+        prev.map((c) => (c._id === updatedCard._id ? updatedCard : c)),
+      );
+      socket?.emit("card-updated", { boardId, payload: updatedCard });
+    } else {
+      fetchBoardData();
+    }
   };
 
   const handleCardDelete = (cardId) => {
     setCards((prev) => prev.filter((c) => c._id !== cardId));
+    socket?.emit("card-deleted", { boardId, payload: { cardId } });
   };
 
   // --- Drag and Drop Logic ---
@@ -86,7 +174,6 @@ const BoardPage = () => {
       return;
     }
 
-    // --- Reordering LISTS ---
     if (type === "LIST") {
       const prevLists = lists;
       const reordered = Array.from(lists);
@@ -99,6 +186,11 @@ const BoardPage = () => {
         await api.put("/lists/reorder", {
           lists: reindexed.map((l) => ({ id: l._id, position: l.position })),
         });
+        socket?.emit("list-reordered", {
+          boardId,
+          payload: { lists: reindexed },
+        });
+        // eslint-disable-next-line no-unused-vars
       } catch (err) {
         setLists(prevLists);
         showToast("Failed to reorder lists — restored");
@@ -106,10 +198,7 @@ const BoardPage = () => {
       return;
     }
 
-    // --- Moving/Reordering CARDS ---
     const prevCards = cards;
-    // eslint-disable-next-line no-unused-vars
-    const sourceListId = source.droppableId;
     const destListId = destination.droppableId;
 
     let updatedCards = [...cards];
@@ -140,6 +229,10 @@ const BoardPage = () => {
         cardId: draggableId,
         newListId: destListId,
         updatedCards: updatedCardsPayload,
+      });
+      socket?.emit("card-moved", {
+        boardId,
+        payload: { listId: destListId, cards: reindexedDest },
       });
       // eslint-disable-next-line no-unused-vars
     } catch (err) {
@@ -181,7 +274,7 @@ const BoardPage = () => {
               ))}
               {provided.placeholder}
 
-              <div className="w-72 shrink-0">
+              <div className="w-72 flex-shrink-0">
                 {showListForm ?
                   <form
                     onSubmit={handleAddList}
@@ -226,6 +319,7 @@ const BoardPage = () => {
       {selectedCardId && (
         <CardModal
           cardId={selectedCardId}
+          boardId={boardId}
           onClose={() => setSelectedCardId(null)}
           onUpdate={handleCardUpdate}
           onDelete={handleCardDelete}
