@@ -1,15 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
 
-const CardModal = ({ cardId, onClose, onUpdate, onDelete }) => {
+const CardModal = ({ cardId, boardId, onClose, onUpdate, onDelete }) => {
   const [card, setCard] = useState(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [commentText, setCommentText] = useState("");
-  // eslint-disable-next-line no-unused-vars
+  const [typingUsers, setTypingUsers] = useState([]);
   const { user } = useAuth();
+  const { socket } = useSocket();
+  const typingTimeoutRef = useRef(null);
 
   const fetchCard = async () => {
     const res = await api.get(`/cards/${cardId}`);
@@ -24,6 +27,42 @@ const CardModal = ({ cardId, onClose, onUpdate, onDelete }) => {
     fetchCard();
   }, [cardId]);
 
+  // --- Listen for live comment additions + typing indicators scoped to this card ---
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCommentAdded = (payload) => {
+      if (payload.cardId !== cardId) return;
+      setCard((prev) =>
+        prev ? { ...prev, comments: payload.comments } : prev,
+      );
+    };
+
+    const handleTypingStart = (payload) => {
+      if (payload.cardId !== cardId || payload.userId === user._id) return;
+      setTypingUsers((prev) =>
+        prev.some((u) => u.userId === payload.userId) ? prev : (
+          [...prev, payload]
+        ),
+      );
+    };
+
+    const handleTypingStop = (payload) => {
+      if (payload.cardId !== cardId) return;
+      setTypingUsers((prev) => prev.filter((u) => u.userId !== payload.userId));
+    };
+
+    socket.on("comment-added", handleCommentAdded);
+    socket.on("typing-start", handleTypingStart);
+    socket.on("typing-stop", handleTypingStop);
+
+    return () => {
+      socket.off("comment-added", handleCommentAdded);
+      socket.off("typing-start", handleTypingStart);
+      socket.off("typing-stop", handleTypingStop);
+    };
+  }, [socket, cardId, user._id]);
+
   const handleSave = async () => {
     const res = await api.put(`/cards/${cardId}`, {
       title,
@@ -34,6 +73,24 @@ const CardModal = ({ cardId, onClose, onUpdate, onDelete }) => {
     onUpdate(res.data);
   };
 
+  const handleCommentInputChange = (e) => {
+    setCommentText(e.target.value);
+
+    if (!socket) return;
+    socket.emit("typing-start", {
+      boardId,
+      payload: { cardId, userId: user._id, userName: user.name },
+    });
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("typing-stop", {
+        boardId,
+        payload: { cardId, userId: user._id },
+      });
+    }, 1500);
+  };
+
   const handleAddComment = async (e) => {
     e.preventDefault();
     if (!commentText.trim()) return;
@@ -42,11 +99,30 @@ const CardModal = ({ cardId, onClose, onUpdate, onDelete }) => {
     });
     setCard(res.data);
     setCommentText("");
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    socket?.emit("typing-stop", {
+      boardId,
+      payload: { cardId, userId: user._id },
+    });
+    socket?.emit("comment-added", {
+      boardId,
+      payload: { cardId, comments: res.data.comments },
+    });
   };
 
   const handleDelete = async () => {
     await api.delete(`/cards/${cardId}`);
     onDelete(cardId);
+    onClose();
+  };
+
+  const handleClose = () => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    socket?.emit("typing-stop", {
+      boardId,
+      payload: { cardId, userId: user._id },
+    });
     onClose();
   };
 
@@ -64,7 +140,7 @@ const CardModal = ({ cardId, onClose, onUpdate, onDelete }) => {
               className="text-lg font-semibold text-gray-800 flex-1 outline-none border-b border-transparent focus:border-primary/50 transition"
             />
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="text-gray-400 hover:text-gray-600 text-xl leading-none"
             >
               ✕
@@ -115,10 +191,18 @@ const CardModal = ({ cardId, onClose, onUpdate, onDelete }) => {
                 <p className="text-xs text-gray-400">No comments yet</p>
               )}
             </div>
+
+            {typingUsers.length > 0 && (
+              <p className="text-xs text-gray-400 italic mt-2">
+                {typingUsers.map((u) => u.userName).join(", ")}{" "}
+                {typingUsers.length === 1 ? "is" : "are"} typing...
+              </p>
+            )}
+
             <form onSubmit={handleAddComment} className="flex gap-2 mt-3">
               <input
                 value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
+                onChange={handleCommentInputChange}
                 placeholder="Write a comment..."
                 className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
