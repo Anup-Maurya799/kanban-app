@@ -39,7 +39,6 @@ const io = new Server(server, {
 
 initSocket(io);
 
-// Make io accessible in controllers (so REST endpoints can also broadcast)
 app.set("io", io);
 
 const PORT = process.env.PORT || 5000;

@@ -25,6 +25,7 @@ const CardModal = ({ cardId, boardId, onClose, onUpdate, onDelete }) => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardId]);
 
   // --- Listen for live comment additions + typing indicators scoped to this card ---
