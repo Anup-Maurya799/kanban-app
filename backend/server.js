@@ -11,6 +11,8 @@ import boardRoutes from "./routes/boardRoutes.js";
 import listRoutes from "./routes/listRoutes.js";
 import cardRoutes from "./routes/cardRoutes.js";
 import { initSocket } from "./socket/socketHandler.js";
+import searchRoutes from "./routes/searchRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 
 dotenv.config();
 
@@ -27,6 +29,8 @@ app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/boards", boardRoutes);
 app.use("/api/lists", listRoutes);
 app.use("/api/cards", cardRoutes);
+app.use("/api/search", searchRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 const server = http.createServer(app);
 

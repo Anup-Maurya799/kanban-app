@@ -1,4 +1,5 @@
 import Card from "../models/Card.js";
+import { createNotification } from "./notificationController.js";
 
 // @route POST /api/cards
 export const createCard = async (req, res) => {
@@ -65,6 +66,8 @@ export const updateCard = async (req, res) => {
       return res.status(404).json({ message: "Card not found" });
     }
 
+    const previousAssignees = card.assignees.map((a) => a.toString());
+
     if (title !== undefined) card.title = title;
     if (description !== undefined) card.description = description;
     if (dueDate !== undefined) card.dueDate = dueDate;
@@ -72,6 +75,23 @@ export const updateCard = async (req, res) => {
     if (assignees !== undefined) card.assignees = assignees;
 
     await card.save();
+
+    // Notify newly added assignees
+    if (assignees !== undefined) {
+      const newlyAssigned = assignees.filter(
+        (id) => !previousAssignees.includes(id),
+      );
+      for (const userId of newlyAssigned) {
+        await createNotification({
+          userId,
+          type: "assigned",
+          message: `You were assigned to "${card.title}"`,
+          boardId: card.board,
+          cardId: card._id,
+        });
+      }
+    }
+
     res.json(card);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -109,6 +129,7 @@ export const moveCard = async (req, res) => {
 };
 
 // @route POST /api/cards/:id/comments
+// @route POST /api/cards/:id/comments
 export const addComment = async (req, res) => {
   try {
     const { text } = req.body;
@@ -119,6 +140,19 @@ export const addComment = async (req, res) => {
 
     card.comments.push({ user: req.user._id, text });
     await card.save();
+
+    // Notify assignees (except the commenter themselves)
+    for (const assigneeId of card.assignees) {
+      if (assigneeId.toString() !== req.user._id.toString()) {
+        await createNotification({
+          userId: assigneeId,
+          type: "comment",
+          message: `New comment on "${card.title}"`,
+          boardId: card.board,
+          cardId: card._id,
+        });
+      }
+    }
 
     const updatedCard = await Card.findById(req.params.id).populate(
       "comments.user",
