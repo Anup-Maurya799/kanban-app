@@ -250,7 +250,7 @@ const BoardPage = () => {
   }
 
   return (
-    <MainLayout title={board.title}>
+    <MainLayout title={board.title} workspaceId={board.workspace}>
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="board" type="LIST" direction="horizontal">
           {(provided) => (

@@ -60,7 +60,7 @@ const WorkspaceSettings = () => {
   }
 
   return (
-    <MainLayout title={`${workspace.name}`}>
+    <MainLayout title={`${workspace.name}`} workspaceId={id}>
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Boards Section */}
         <div className="bg-white rounded-xl shadow-sm p-5 sm:p-6">
