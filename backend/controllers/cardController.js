@@ -23,6 +23,7 @@ export const createCard = async (req, res) => {
       board: boardId,
       position,
     });
+    await invalidateBoardCache(boardId);
     res.status(201).json(card);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -75,6 +76,7 @@ export const updateCard = async (req, res) => {
     if (assignees !== undefined) card.assignees = assignees;
 
     await card.save();
+    await invalidateBoardCache(card.board);
 
     // Notify newly added assignees
     if (assignees !== undefined) {
@@ -122,6 +124,7 @@ export const moveCard = async (req, res) => {
       await Card.bulkWrite(bulkOps);
     }
 
+    await invalidateBoardCache(card.board);
     res.json({ message: "Card moved successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -140,6 +143,7 @@ export const addComment = async (req, res) => {
 
     card.comments.push({ user: req.user._id, text });
     await card.save();
+    await invalidateBoardCache(card.board);
 
     // Notify assignees (except the commenter themselves)
     for (const assigneeId of card.assignees) {
@@ -171,7 +175,9 @@ export const deleteCard = async (req, res) => {
     if (!card) {
       return res.status(404).json({ message: "Card not found" });
     }
+    const boardId = card.board;
     await card.deleteOne();
+    await invalidateBoardCache(boardId);
     res.json({ message: "Card deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });

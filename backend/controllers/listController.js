@@ -1,5 +1,6 @@
 import List from "../models/List.js";
 import Card from "../models/Card.js";
+import { invalidateBoardCache } from "../utils/cacheUtils.js";
 
 // @route POST /api/lists
 export const createList = async (req, res) => {
@@ -18,6 +19,7 @@ export const createList = async (req, res) => {
     const position = lastList ? lastList.position + 1 : 0;
 
     const list = await List.create({ title, board: boardId, position });
+    await invalidateBoardCache(boardId);
     res.status(201).json(list);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -46,6 +48,7 @@ export const updateList = async (req, res) => {
     }
     if (title) list.title = title;
     await list.save();
+    await invalidateBoardCache(list.board);
     res.json(list);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -66,6 +69,12 @@ export const reorderLists = async (req, res) => {
     }));
 
     await List.bulkWrite(bulkOps);
+
+    if (lists.length > 0) {
+      const anyList = await List.findById(lists[0].id);
+      if (anyList) await invalidateBoardCache(anyList.board);
+    }
+
     res.json({ message: "Lists reordered successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -79,8 +88,10 @@ export const deleteList = async (req, res) => {
     if (!list) {
       return res.status(404).json({ message: "List not found" });
     }
+    const boardId = list.board;
     await Card.deleteMany({ list: list._id });
     await list.deleteOne();
+    await invalidateBoardCache(boardId);
     res.json({ message: "List deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });

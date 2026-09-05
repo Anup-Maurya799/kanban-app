@@ -28,14 +28,21 @@ const BoardPage = () => {
   };
 
   const fetchBoardData = async () => {
-    const [boardRes, listsRes, cardsRes] = await Promise.all([
-      api.get(`/boards/${boardId}`),
-      api.get(`/lists/board/${boardId}`),
-      api.get(`/cards/board/${boardId}`),
-    ]);
-    setBoard(boardRes.data);
-    setLists(listsRes.data.sort((a, b) => a.position - b.position));
-    setCards(cardsRes.data);
+    try {
+      console.log("Fetching board:", boardId);
+
+      const res = await api.get(`/boards/${boardId}/full`);
+
+      console.log("Board response:", res.data);
+
+      setBoard(res.data.board);
+      setLists([...res.data.lists].sort((a, b) => a.position - b.position));
+      setCards(res.data.cards);
+    } catch (error) {
+      console.error("Failed to fetch board:", error);
+      console.error("Server response:", error.response?.data);
+      console.error("Status:", error.response?.status);
+    }
   };
 
   useEffect(() => {

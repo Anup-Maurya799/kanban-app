@@ -2,6 +2,7 @@ import Board from "../models/Board.js";
 import Workspace from "../models/Workspace.js";
 import List from "../models/List.js";
 import Card from "../models/Card.js";
+import redis from "../config/redisClient.js";
 
 // @route POST /api/boards
 export const createBoard = async (req, res) => {
@@ -104,6 +105,44 @@ export const deleteBoard = async (req, res) => {
     await board.deleteOne();
 
     res.json({ message: "Board deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @route GET /api/boards/:id/full
+export const getFullBoardData = async (req, res) => {
+  try {
+    const boardId = req.params.id;
+    const cacheKey = `board:${boardId}`;
+
+    // Try cache first
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return res.json({ ...JSON.parse(cached), fromCache: true });
+    }
+
+    // Cache miss — fetch fresh from MongoDB
+    const board = await Board.findById(boardId).populate(
+      "createdBy",
+      "name email",
+    );
+    if (!board) {
+      return res.status(404).json({ message: "Board not found" });
+    }
+
+    const lists = await List.find({ board: boardId }).sort({ position: 1 });
+    const cards = await Card.find({ board: boardId })
+      .populate("assignees", "name email avatar")
+      .populate("comments.user", "name email")
+      .sort({ position: 1 });
+
+    const data = { board, lists, cards };
+
+    // Cache for 60 seconds
+    await redis.set(cacheKey, JSON.stringify(data), "EX", 60);
+
+    res.json({ ...data, fromCache: false });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
