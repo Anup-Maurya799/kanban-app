@@ -72,5 +72,7 @@ const cardSchema = new mongoose.Schema(
 );
 
 const Card = mongoose.model("Card", cardSchema);
+cardSchema.index({ board: 1, list: 1, position: 1 });
+cardSchema.index({ title: "text", description: "text" });
 
 export default Card;

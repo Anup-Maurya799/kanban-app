@@ -22,5 +22,6 @@ const listSchema = new mongoose.Schema(
 );
 
 const List = mongoose.model("List", listSchema);
+listSchema.index({ board: 1, position: 1 });
 
 export default List;

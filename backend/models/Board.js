@@ -26,5 +26,6 @@ const boardSchema = new mongoose.Schema(
 );
 
 const Board = mongoose.model("Board", boardSchema);
+boardSchema.index({ workspace: 1 });
 
 export default Board;
