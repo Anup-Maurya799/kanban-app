@@ -1,5 +1,6 @@
 import Card from "../models/Card.js";
 import { createNotification } from "./notificationController.js";
+import { invalidateBoardCache } from "../utils/cacheUtils.js";
 
 // @route POST /api/cards
 export const createCard = async (req, res) => {
@@ -107,27 +108,55 @@ export const moveCard = async (req, res) => {
   try {
     const { cardId, newListId, updatedCards } = req.body;
 
-    const card = await Card.findById(cardId);
-    if (!card) {
-      return res.status(404).json({ message: "Card not found" });
+    if (!cardId || !newListId) {
+      return res.status(400).json({
+        message: "cardId and newListId are required",
+      });
     }
+
+    const card = await Card.findById(cardId);
+
+    if (!card) {
+      return res.status(404).json({
+        message: "Card not found",
+      });
+    }
+
+    const boardId = card.board;
+
+    // Update moved card's list
     card.list = newListId;
     await card.save();
 
-    if (updatedCards && updatedCards.length > 0) {
+    // Update positions and lists of affected cards
+    if (Array.isArray(updatedCards) && updatedCards.length > 0) {
       const bulkOps = updatedCards.map((c) => ({
         updateOne: {
           filter: { _id: c.id },
-          update: { position: c.position, list: c.list },
+          update: {
+            $set: {
+              position: c.position,
+              list: c.list,
+            },
+          },
         },
       }));
+
       await Card.bulkWrite(bulkOps);
     }
 
-    await invalidateBoardCache(card.board);
-    res.json({ message: "Card moved successfully" });
+    // Clear Redis board cache
+    await invalidateBoardCache(boardId);
+
+    res.json({
+      message: "Card moved successfully",
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Move card error:", error);
+
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
 
