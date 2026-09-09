@@ -8,19 +8,42 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    socketRef.current = io("http://localhost:5000");
+    const socketUrl =
+      import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
-    socketRef.current.on("connect", () => setConnected(true));
-    socketRef.current.on("disconnect", () => setConnected(false));
+    socketRef.current = io(socketUrl, {
+      withCredentials: true,
+    });
+
+    socketRef.current.on("connect", () => {
+      console.log("Socket connected:", socketRef.current.id);
+      setConnected(true);
+    });
+
+    socketRef.current.on("disconnect", () => {
+      console.log("Socket disconnected");
+      setConnected(false);
+    });
+
+    socketRef.current.on("connect_error", (error) => {
+      console.error("Socket connection error:", error.message);
+      setConnected(false);
+    });
 
     return () => {
-      socketRef.current.disconnect();
+      socketRef.current?.disconnect();
     };
   }, []);
 
   return (
     // eslint-disable-next-line react-hooks/refs
-    <SocketContext.Provider value={{ socket: socketRef.current, connected }}>
+    <SocketContext.Provider
+      value={{
+        // eslint-disable-next-line react-hooks/refs
+        socket: socketRef.current,
+        connected,
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );
