@@ -6,7 +6,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-// import mongoSanitize from "express-mongo-sanitize";
 import mongoSanitize from "@exortek/express-mongo-sanitize";
 import hpp from "hpp";
 
@@ -23,64 +22,134 @@ dotenv.config();
 
 const app = express();
 
-// --- Security middleware ---
-app.use(helmet());
-app.use(express.json({ limit: "10kb" })); // prevent huge payload attacks
-app.use(mongoSanitize()); // strip $ and . from req.body/query/params
-app.use(hpp()); // prevent duplicate query param pollution
+/* =========================================
+   CORS
+========================================= */
+
+// --- CORS ---
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://kanban-kjic1fmb5-anup24.vercel.app",
+  "https://kanban-app-iota-navy.vercel.app",
+];
 
 const corsOptions = {
-  origin: process.env.CLIENT_URL || "*",
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  origin: function (origin, callback) {
+    // Allow requests without origin (Postman, server-to-server, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
 };
+
 app.use(cors(corsOptions));
 
-// --- Rate limiting ---
+/* =========================================
+   Security middleware
+========================================= */
+
+app.use(helmet());
+
+app.use(express.json({ limit: "10kb" }));
+
+app.use(mongoSanitize());
+
+app.use(hpp());
+
+/* =========================================
+   Rate limiting
+========================================= */
+
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // limit each IP to 300 requests per window
-  message: { message: "Too many requests, please try again later." },
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: {
+    message: "Too many requests, please try again later.",
+  },
 });
+
 app.use("/api", generalLimiter);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10, // stricter limit for login/signup to prevent brute-force
-  message: { message: "Too many auth attempts, please try again later." },
+  max: 10,
+  message: {
+    message: "Too many auth attempts, please try again later.",
+  },
 });
+
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/signup", authLimiter);
 
+/* =========================================
+   Health check
+========================================= */
+
 app.get("/api/health", (req, res) => {
-  res.json({ status: "Server running fine ✅" });
+  res.json({
+    status: "Server running fine ✅",
+  });
 });
+
+/* =========================================
+   Routes
+========================================= */
 
 app.use("/api/auth", authRoutes);
+
 app.use("/api/workspaces", workspaceRoutes);
+
 app.use("/api/boards", boardRoutes);
+
 app.use("/api/lists", listRoutes);
+
 app.use("/api/cards", cardRoutes);
+
 app.use("/api/search", searchRoutes);
+
 app.use("/api/notifications", notificationRoutes);
 
-// --- Global error handler (catches anything unhandled) ---
+/* =========================================
+   Global error handler
+========================================= */
+
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err.stack);
-  res.status(500).json({ message: "Something went wrong on the server" });
+
+  res.status(500).json({
+    message: "Something went wrong on the server",
+  });
 });
+
+/* =========================================
+   HTTP + Socket.IO
+========================================= */
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "*",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
 initSocket(io);
+
 app.set("io", io);
+
+/* =========================================
+   Start server
+========================================= */
 
 const PORT = process.env.PORT || 5000;
 
@@ -88,6 +157,11 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB connected");
-    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
   })
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .catch((err) => {
+    console.error("MongoDB connection error:", err);
+  });
