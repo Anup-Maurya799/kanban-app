@@ -35,7 +35,6 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests without origin (Postman, server-to-server, etc.)
     if (!origin) {
       return callback(null, true);
     }
